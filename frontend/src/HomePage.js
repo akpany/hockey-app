@@ -80,6 +80,7 @@ const HomePage = () => {
 
             return (
               <p key={game.id}>
+                hello user
                 <strong>{time}</strong> — {homeFlag} {matchup} {awayFlag}
               </p>
             );
