@@ -4,14 +4,22 @@ import { collection, getDocs } from 'firebase/firestore';
 
 // Map team names to ISO 2-letter codes
 const flagMap = {
-  Finland: 'FI',
-  Sweden: 'SE',
-  Canada: 'CA',
-  USA: 'US',
-  Slovakia: 'SK',
-  Austria: 'AT',
-  Denmark: 'DK',
-  Switzerland: 'CH',
+  Finland: '🇫🇮',
+  Sweden: '🇸🇪',
+  Canada: '🇨🇦',
+  USA: '🇺🇸',
+  Slovakia: '🇸🇰',
+  Austria: '🇦🇹',
+  Denmark: '🇩🇰',
+  Switzerland: '🇨🇭',
+  Czechia: '🇨🇿',
+  Norway: '🇳🇴',
+  Kazakhstan: '🇰🇿',
+  Slovenia: '🇸🇮',
+  Germany: '🇩🇪',
+  Hungary: '🇭🇺',
+  France: '🇫🇷',
+  Latvia: '🇱🇻',
   // Add more as needed
 };
 
