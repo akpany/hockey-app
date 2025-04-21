@@ -1,18 +1,35 @@
-// Leaderboard.js
 import React, { useEffect, useState } from 'react';
 import { db } from './firebase';
 import { collection, getDocs } from 'firebase/firestore';
+import {
+  Container,
+  Typography,
+  Paper,
+  List,
+  ListItem,
+  ListItemText,
+  Divider,
+} from '@mui/material';
 
-function calculatePoints(predA, predB, actualA, actualB) {
-  const predictedWinner = predA > predB ? 'A' : predA < predB ? 'B' : 'D';
-  const actualWinner = actualA > actualB ? 'A' : actualA < actualB ? 'B' : 'D';
+function calculatePoints(predHome, predAway, actualHome, actualAway) {
+  const predictedWinner =
+    predHome > predAway ? 'home' : predHome < predAway ? 'away' : 'draw';
+  const actualWinner =
+    actualHome > actualAway ? 'home' : actualHome < actualAway ? 'away' : 'draw';
 
   if (predictedWinner !== actualWinner) return 0;
-  if (predA === actualA && predB === actualB) return 10;
+
+  if (predHome === actualHome && predAway === actualAway) {
+    return actualWinner === 'draw' ? 20 : 10; // Täydellinen tasapeli, tuplapisteet
+  }
 
   const scoreDifference =
-    Math.abs(predA - actualA) + Math.abs(predB - actualB);
-  return Math.max(0, 10 - scoreDifference);
+    Math.abs(predHome - actualHome) + Math.abs(predAway - actualAway);
+
+  return Math.max(
+    0,
+    actualWinner === 'draw' ? 20 - scoreDifference * 2 : 10 - scoreDifference
+  ); // Tasapelin pisteet tuplana
 }
 
 const Leaderboard = () => {
@@ -22,10 +39,10 @@ const Leaderboard = () => {
     const fetchData = async () => {
       const gamesSnapshot = await getDocs(collection(db, 'games'));
       const games = {};
-      gamesSnapshot.forEach(doc => {
+      gamesSnapshot.forEach((doc) => {
         const data = doc.data();
         if (data.result?.home !== undefined && data.result?.away !== undefined) {
-          games[data.id] = {
+          games[doc.id] = {
             homeTeam: data.homeTeam,
             awayTeam: data.awayTeam,
             homeScore: data.result.home,
@@ -35,19 +52,28 @@ const Leaderboard = () => {
       });
 
       const predictionsSnapshot = await getDocs(collection(db, 'predictions'));
-      const userScores = [];
+      const usersSnapshot = await getDocs(collection(db, 'users'));
+      const users = {};
+      usersSnapshot.forEach((doc) => {
+        const data = doc.data();
+        users[doc.id] = data.username || 'Unknown User';
+      });
 
-      predictionsSnapshot.forEach(doc => {
+      const userScores = [];
+      predictionsSnapshot.forEach((doc) => {
         const uid = doc.id;
-        const data = doc.data().predictions || {};
+        if (!users[uid]) return;
+
+        const predictions = doc.data().predictions || {};
         let totalPoints = 0;
 
-        for (const [gameId, guess] of Object.entries(data)) {
+        for (const [gameId, guess] of Object.entries(predictions)) {
           const game = games[gameId];
           if (!game) continue;
 
-          const predictedHome = parseInt(guess[game.homeTeam]);
-          const predictedAway = parseInt(guess[game.awayTeam]);
+          // Tässä käytetään Firestonen avaimia suoraan ennusteiden lukemiseen
+          const predictedHome = parseInt(guess[game.homeTeam], 10);
+          const predictedAway = parseInt(guess[game.awayTeam], 10);
           const actualHome = game.homeScore;
           const actualAway = game.awayScore;
 
@@ -56,8 +82,9 @@ const Leaderboard = () => {
             isNaN(predictedAway) ||
             actualHome === undefined ||
             actualAway === undefined
-          )
+          ) {
             continue;
+          }
 
           const points = calculatePoints(
             predictedHome,
@@ -68,10 +95,12 @@ const Leaderboard = () => {
           totalPoints += points;
         }
 
-        userScores.push({ uid, points: totalPoints });
+        userScores.push({
+          username: users[uid],
+          points: totalPoints,
+        });
       });
 
-      // Sort by points, descending
       userScores.sort((a, b) => b.points - a.points);
       setScores(userScores);
     };
@@ -80,20 +109,40 @@ const Leaderboard = () => {
   }, []);
 
   return (
-    <div>
-      <h2>Leaderboard</h2>
+    <Container maxWidth="sm" sx={{ py: 4 }}>
+      <Typography variant="h4" gutterBottom color="white">
+        Leaderboard
+      </Typography>
       {scores.length === 0 ? (
-        <p>No scores to display yet.</p>
+        <Typography color="white">No scores to display yet.</Typography>
       ) : (
-        <ol>
-          {scores.map(({ uid, points }) => (
-            <li key={uid}>
-              {uid}: {points} points
-            </li>
-          ))}
-        </ol>
+        <Paper sx={{ backgroundColor: '#2d2d2d' }}>
+          <List>
+            {scores.map(({ username, points }, index) => (
+              <React.Fragment key={index}>
+                <ListItem>
+                  <ListItemText
+                    primary={
+                      <Typography color="white">
+                        #{index + 1} – {username}
+                      </Typography>
+                    }
+                    secondary={
+                      <Typography color="gray">
+                        {points} point{points === 1 ? '' : 's'}
+                      </Typography>
+                    }
+                  />
+                </ListItem>
+                {index < scores.length - 1 && (
+                  <Divider sx={{ backgroundColor: '#444' }} />
+                )}
+              </React.Fragment>
+            ))}
+          </List>
+        </Paper>
       )}
-    </div>
+    </Container>
   );
 };
 

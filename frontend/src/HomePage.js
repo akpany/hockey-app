@@ -1,35 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { db } from './firebase';
+import { db } from './firebase-config';
 import { collection, getDocs } from 'firebase/firestore';
-
-// Map team names to ISO 2-letter codes
-const flagMap = {
-  Finland: '🇫🇮',
-  Sweden: '🇸🇪',
-  Canada: '🇨🇦',
-  USA: '🇺🇸',
-  Slovakia: '🇸🇰',
-  Austria: '🇦🇹',
-  Denmark: '🇩🇰',
-  Switzerland: '🇨🇭',
-  Czechia: '🇨🇿',
-  Norway: '🇳🇴',
-  Kazakhstan: '🇰🇿',
-  Slovenia: '🇸🇮',
-  Germany: '🇩🇪',
-  Hungary: '🇭🇺',
-  France: '🇫🇷',
-  Latvia: '🇱🇻',
-  // Add more as needed
-};
-
-const getFlagEmoji = (teamName) => {
-  const code = flagMap[teamName];
-  if (!code) return '🏳️';
-  return code
-    .toUpperCase()
-    .replace(/./g, char => String.fromCodePoint(127397 + char.charCodeAt()));
-};
+import {
+  Container,
+  Grid,
+  Typography,
+  Paper,
+} from '@mui/material';
 
 const HomePage = () => {
   const [gamesByDate, setGamesByDate] = useState({});
@@ -38,21 +15,24 @@ const HomePage = () => {
     const fetchGames = async () => {
       try {
         const snapshot = await getDocs(collection(db, 'games'));
-        const games = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const games = snapshot.docs.map(doc => {
+          const data = doc.data();
+          const parsedTime = typeof data.startTime === 'string'
+            ? new Date(data.startTime)
+            : data.startTime?.toDate?.() || new Date();
 
-        const parsed = games
-          .filter(game => game.startTime)
-          .map(game => {
-            const dateObj = typeof game.startTime === 'string'
-              ? new Date(game.startTime)
-              : game.startTime.toDate?.() || new Date();
-            return { ...game, parsedStartTime: dateObj };
-          })
-          .sort((a, b) => a.parsedStartTime - b.parsedStartTime);
+          return {
+            id: doc.id,
+            ...data,
+            parsedStartTime: parsedTime,
+          };
+        });
+
+        games.sort((a, b) => a.parsedStartTime - b.parsedStartTime);
 
         const grouped = {};
-        parsed.forEach(game => {
-          const dateKey = game.parsedStartTime.toISOString().split('T')[0]; // YYYY-MM-DD
+        games.forEach(game => {
+          const dateKey = game.parsedStartTime.toLocaleDateString();
           if (!grouped[dateKey]) grouped[dateKey] = [];
           grouped[dateKey].push(game);
         });
@@ -66,35 +46,64 @@ const HomePage = () => {
     fetchGames();
   }, []);
 
+  const getFlagSrc = (teamName) => {
+    if (!teamName) return '/flags/unknown.png';
+    return `/flags/${teamName.toLowerCase()}.png`;
+  };
+
   return (
-    <div>
-      <h2>Game Schedule</h2>
+    <Container maxWidth="md" sx={{ py: 4 }}>
+      <Typography variant="h4" gutterBottom color="white">
+        Game Schedule
+      </Typography>
+
       {Object.entries(gamesByDate).map(([date, games]) => (
-        <div key={date} style={{ marginBottom: '30px' }}>
-          <h3>{new Date(date).toLocaleDateString('en-GB')}</h3>
-          {games.map(game => {
-            const time = game.parsedStartTime.toLocaleTimeString('en-GB', {
-              hour: '2-digit',
-              minute: '2-digit',
-            });
+        <Grid container direction="column" spacing={2} key={date}>
+          <Grid item>
+            <Typography variant="h6" color="white" sx={{ mb: 2 }}>
+              {date}
+            </Typography>
+            {games.map((game) => {
+              const showResult = game.result && game.result.home != null && game.result.away != null;
+              const time = game.parsedStartTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-            const homeFlag = getFlagEmoji(game.homeTeam);
-            const awayFlag = getFlagEmoji(game.awayTeam);
+              return (
+                <Paper key={game.id} sx={{ p: 2, backgroundColor: '#2d2d2d', mb: 1 }}>
+                  <Grid container alignItems="center" spacing={1}>
+                    <Grid item>
+                      <Typography color="white">{time}</Typography>
+                    </Grid>
+                    <Grid item>
+                      <Typography sx={{ minWidth: 70 }} color="white">
+                        {game.homeTeam}
+                      </Typography>
+                    </Grid>
+                    <Grid item>
+                      <img src={getFlagSrc(game.homeTeam)} alt={game.homeTeam} style={{ width: 24, height: 16 }} />
+                    </Grid>
 
-            const result = game.result;
-            const matchup = result
-              ? `${game.homeTeam} ${result.home} - ${result.away} ${game.awayTeam}`
-              : `${game.homeTeam} - ${game.awayTeam}`;
+                    <Grid item>
+                      <Typography color="white">
+                        {showResult ? `${game.result.home} – ${game.result.away}` : '–'}
+                      </Typography>
+                    </Grid>
 
-            return (
-              <p key={game.id}>
-                <strong>{time}</strong> — {homeFlag} {matchup} {awayFlag}
-              </p>
-            );
-          })}
-        </div>
+                    <Grid item>
+                      <img src={getFlagSrc(game.awayTeam)} alt={game.awayTeam} style={{ width: 24, height: 16 }} />
+                    </Grid>
+                    <Grid item>
+                      <Typography sx={{ minWidth: 70 }} color="white">
+                        {game.awayTeam}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                </Paper>
+              );
+            })}
+          </Grid>
+        </Grid>
       ))}
-    </div>
+    </Container>
   );
 };
 
