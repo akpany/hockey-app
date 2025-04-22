@@ -41,17 +41,18 @@ const MyPredictions = () => {
       if (!user) return;
 
       try {
-        const predictionsDoc = await getDoc(doc(db, 'predictions', user.uid));
+        const predictionsDoc = await getDoc(doc(db, "predictions", user.uid));
         if (predictionsDoc.exists()) {
           setPredictions(predictionsDoc.data().predictions || {});
         }
 
-        const gamesSnapshot = await getDocs(collection(db, 'games'));
-        const gamesList = gamesSnapshot.docs.map(doc => {
+        const gamesSnapshot = await getDocs(collection(db, "games"));
+        const gamesList = gamesSnapshot.docs.map((doc) => {
           const data = doc.data();
-          const parsedTime = typeof data.startTime === 'string'
-            ? new Date(data.startTime)
-            : data.startTime?.toDate?.() || new Date();
+          const parsedTime =
+            typeof data.startTime === "string"
+              ? new Date(data.startTime)
+              : data.startTime?.toDate?.() || new Date();
 
           return {
             id: doc.id,
@@ -65,7 +66,7 @@ const MyPredictions = () => {
 
         // Group by date
         const grouped = {};
-        gamesList.forEach(game => {
+        gamesList.forEach((game) => {
           const dateKey = game.parsedStartTime.toLocaleDateString();
           if (!grouped[dateKey]) grouped[dateKey] = [];
           grouped[dateKey].push(game);
@@ -73,7 +74,7 @@ const MyPredictions = () => {
 
         setGamesByDate(grouped);
       } catch (error) {
-        console.error('Error fetching predictions or games:', error);
+        console.error("Error fetching predictions or games:", error);
       }
 
       setLoading(false);
@@ -83,13 +84,13 @@ const MyPredictions = () => {
   }, []);
 
   const getFlagSrc = (teamName) => {
-    if (!teamName) return '/flags/unknown.png';
+    if (!teamName) return "/flags/unknown.png";
     return `/flags/${teamName.toLowerCase()}.png`;
   };
 
   if (loading) {
     return (
-      <Container sx={{ textAlign: 'center', mt: 4 }}>
+      <Container sx={{ textAlign: "center", mt: 4 }}>
         <CircularProgress />
         <Typography color="white" mt={2}>
           Loading your predictions...
@@ -116,27 +117,34 @@ const MyPredictions = () => {
 
               const homeTeam = game.homeTeam;
               const awayTeam = game.awayTeam;
-              const actualHome = game.result?.home;
-              const actualAway = game.result?.away;
+
+              // Tarkistetaan tulokset ja varmistetaan niiden tyypit
+              const actualHome = game.result?.home !== undefined ? parseInt(game.result.home, 10) : null;
+              const actualAway = game.result?.away !== undefined ? parseInt(game.result.away, 10) : null;
 
               const hasResult =
-                typeof actualHome === 'number' && typeof actualAway === 'number';
+                actualHome !== null &&
+                actualAway !== null &&
+                !isNaN(actualHome) &&
+                !isNaN(actualAway);
 
-              const predictedHome = parseInt(pred[homeTeam]);
-              const predictedAway = parseInt(pred[awayTeam]);
+              // Ennusteiden lukeminen rakenteen mukaisesti
+              const predictedHome = pred?.homeScore !== undefined ? parseInt(pred.homeScore, 10) : "N/A";
+              const predictedAway = pred?.awayScore !== undefined ? parseInt(pred.awayScore, 10) : "N/A";
 
+              // Lasketaan pisteet, jos tulokset ovat käytettävissä
               const points = hasResult
                 ? calculatePoints(predictedHome, predictedAway, actualHome, actualAway)
                 : null;
 
               return (
-                <Paper key={game.id} sx={{ p: 2, backgroundColor: '#2d2d2d', mb: 1 }}>
+                <Paper key={game.id} sx={{ p: 2, backgroundColor: "#2d2d2d", mb: 1 }}>
                   <Grid container alignItems="center" spacing={1}>
                     <Grid item>
                       <Typography color="white">
                         {game.parsedStartTime.toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
+                          hour: "2-digit",
+                          minute: "2-digit",
                         })}
                       </Typography>
                     </Grid>
@@ -175,7 +183,7 @@ const MyPredictions = () => {
                       <Typography color="white" sx={{ mt: 1 }}>
                         {hasResult
                           ? `Final Score: ${actualHome} – ${actualAway} | Points: ${points}`
-                          : 'Game not finished yet.'}
+                          : "Game not finished yet."}
                       </Typography>
                     </Grid>
                   </Grid>

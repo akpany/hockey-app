@@ -61,11 +61,25 @@ const GamePredictionForm = () => {
   };
 
   const handleInputChange = (gameId, team, value) => {
+    const numericValue = parseInt(value, 10);
+    if (isNaN(numericValue) || numericValue < 0) {
+      console.error(`Invalid value: ${value}`);
+      return;
+    }
+  
+    const currentGame = games.find((game) => game.id === gameId);
+    if (!currentGame) {
+      console.error(`Game with ID ${gameId} not found!`);
+      return;
+    }
+  
     setPredictions((prev) => ({
       ...prev,
       [gameId]: {
-        ...prev[gameId],
-        [team]: value,
+        homeTeam: currentGame.homeTeam,
+        awayTeam: currentGame.awayTeam,
+        homeScore: team === currentGame.homeTeam ? numericValue : prev[gameId]?.homeScore ?? 0,
+        awayScore: team === currentGame.awayTeam ? numericValue : prev[gameId]?.awayScore ?? 0,
       },
     }));
   };
@@ -136,25 +150,23 @@ const GamePredictionForm = () => {
                       <TextField
                         type="number"
                         size="small"
-                        value={predictions[game.id]?.[game.homeTeam] || ''}
-                        onChange={(e) =>
-                          handleInputChange(game.id, game.homeTeam, e.target.value)
-                        }
-                        inputProps={{ min: 0, style: { textAlign: 'center', width: 40 } }}
+                        value={predictions[game.id]?.homeScore ?? 0} // Varmistetaan, että arvo on numero
+                        onChange={(e) => handleInputChange(game.id, game.homeTeam, e.target.value)}
+                        inputProps={{ min: 0, style: { textAlign: 'center', width: '40px' } }}
                         required
                       />
+
                     </Grid>
                     <Grid item>
                       <TextField
                         type="number"
                         size="small"
-                        value={predictions[game.id]?.[game.awayTeam] || ''}
-                        onChange={(e) =>
-                          handleInputChange(game.id, game.awayTeam, e.target.value)
-                        }
-                        inputProps={{ min: 0, style: { textAlign: 'center', width: 40 } }}
+                        value={predictions[game.id]?.awayScore ?? 0} // Varmistetaan, että arvo on numero
+                        onChange={(e) => handleInputChange(game.id, game.awayTeam, e.target.value)}
+                        inputProps={{ min: 0, style: { textAlign: 'center', width: '40px' } }}
                         required
                       />
+
                     </Grid>
                     <Grid item>
                       <img
