@@ -1,30 +1,85 @@
 import React, { useState, useEffect } from 'react';
-import { db, auth } from './firebase-config'; // make sure the file is inside src/
-import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
+import { db, auth } from './firebase-config';
+import { collection, getDocs, doc, setDoc, getDoc } from 'firebase/firestore';
+import {
+  Box,
+  Button,
+  Container,
+  Grid,
+  TextField,
+  Typography,
+  Paper,
+} from '@mui/material';
 
 const GamePredictionForm = () => {
   const [games, setGames] = useState([]);
   const [predictions, setPredictions] = useState({});
 
   useEffect(() => {
-    const fetchGames = async () => {
-      const gamesSnapshot = await getDocs(collection(db, "games"));
-      const gamesList = gamesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+    const fetchGamesAndPredictions = async () => {
+      const user = auth.currentUser;
+  
+      const gamesSnapshot = await getDocs(collection(db, 'games'));
+      const gamesList = gamesSnapshot.docs.map((doc) => {
+        const data = doc.data();
+        const parsedTime = typeof data.startTime === 'string'
+          ? new Date(data.startTime)
+          : data.startTime?.toDate?.() || new Date();
+        return {
+          id: doc.id,
+          ...data,
+          parsedStartTime: parsedTime,
+        };
+      });
+  
+      // Sort games by start time
+      gamesList.sort((a, b) => a.parsedStartTime - b.parsedStartTime);
       setGames(gamesList);
+  
+      // Fetch user predictions if logged in
+      if (user) {
+        const userDoc = await getDoc(doc(db, 'predictions', user.uid));
+        if (userDoc.exists()) {
+          const savedPredictions = userDoc.data().predictions || {};
+          setPredictions(savedPredictions);
+        }
+      }
     };
+  
+    fetchGamesAndPredictions();
+  }, []);  
 
-    fetchGames();
-  }, []);
+  const groupGamesByDate = (gamesList) => {
+    return gamesList.reduce((groupedGames, game) => {
+      const gameDate = game.parsedStartTime.toLocaleDateString();
+      if (!groupedGames[gameDate]) {
+        groupedGames[gameDate] = [];
+      }
+      groupedGames[gameDate].push(game);
+      return groupedGames;
+    }, {});
+  };
 
   const handleInputChange = (gameId, team, value) => {
+    const numericValue = parseInt(value, 10);
+    if (isNaN(numericValue) || numericValue < 0) {
+      console.error(`Invalid value: ${value}`);
+      return;
+    }
+  
+    const currentGame = games.find((game) => game.id === gameId);
+    if (!currentGame) {
+      console.error(`Game with ID ${gameId} not found!`);
+      return;
+    }
+  
     setPredictions((prev) => ({
       ...prev,
       [gameId]: {
-        ...prev[gameId],
-        [team]: value,
+        homeTeam: currentGame.homeTeam,
+        awayTeam: currentGame.awayTeam,
+        homeScore: team === currentGame.homeTeam ? numericValue : prev[gameId]?.homeScore ?? 0,
+        awayScore: team === currentGame.awayTeam ? numericValue : prev[gameId]?.awayScore ?? 0,
       },
     }));
   };
@@ -34,7 +89,7 @@ const GamePredictionForm = () => {
 
     const user = auth.currentUser;
     if (!user) {
-      alert("You must be logged in to submit predictions.");
+      alert('You must be logged in to submit predictions.');
       return;
     }
 
@@ -45,55 +100,99 @@ const GamePredictionForm = () => {
         timestamp: new Date(),
       });
 
-      alert("Predictions saved!");
+      alert('Predictions saved!');
     } catch (error) {
-      console.error("Error saving predictions:", error);
-      alert("Something went wrong while saving.");
+      console.error('Error saving predictions:', error);
+      alert('Something went wrong while saving.');
     }
   };
 
+  const getFlagSrc = (teamName) => {
+    if (!teamName) return '/flags/unknown.png';
+    return `/flags/${teamName.toLowerCase()}.png`;
+  };
+
+  const groupedGames = groupGamesByDate(games);
+
   return (
-    <div className="p-4 text-white">
-      <h2 className="text-2xl font-bold mb-4">Predict Game Scores</h2>
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {games.map((game) => (
-          <div key={game.id} className="bg-zinc-800 p-4 rounded-xl shadow-md">
-            <strong className="text-lg">
-              {game.homeTeam} vs {game.awayTeam}
-            </strong>
-            <div className="mt-2 flex items-center gap-2">
-              <input
-                type="number"
-                placeholder={`${game.homeTeam} Score`}
-                value={predictions[game.id]?.[game.homeTeam] || ''}
-                onChange={(e) =>
-                  handleInputChange(game.id, game.homeTeam, e.target.value)
-                }
-                className="p-2 rounded bg-zinc-700 text-white w-20"
-                required
-              />
-              <span>–</span>
-              <input
-                type="number"
-                placeholder={`${game.awayTeam} Score`}
-                value={predictions[game.id]?.[game.awayTeam] || ''}
-                onChange={(e) =>
-                  handleInputChange(game.id, game.awayTeam, e.target.value)
-                }
-                className="p-2 rounded bg-zinc-700 text-white w-20"
-                required
-              />
-            </div>
-          </div>
-        ))}
-        <button
-          type="submit"
-          className="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 rounded text-white"
-        >
-          Submit Predictions
-        </button>
+    <Container maxWidth="md" sx={{ py: 4 }}>
+      <Typography variant="h4" gutterBottom color="white">
+        Predict Game Scores
+      </Typography>
+      <form onSubmit={handleSubmit}>
+        <Grid container direction="column" spacing={2}>
+          {Object.entries(groupedGames).map(([date, gamesOnDate]) => (
+            <Grid item key={date}>
+              <Typography variant="h6" color="white" sx={{ mb: 2 }}>
+                {date}
+              </Typography>
+              {gamesOnDate.map((game) => (
+                <Paper key={game.id} sx={{ p: 2, backgroundColor: '#2d2d2d', mb: 1 }}>
+                  <Grid container alignItems="center" spacing={1}>
+                    <Grid item>
+                      <Typography color="white">
+                        {game.parsedStartTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </Typography>
+                    </Grid>
+                    <Grid item>
+                      <Typography sx={{ minWidth: 70 }} color="white">
+                        {game.homeTeam}
+                      </Typography>
+                    </Grid>
+                    <Grid item>
+                      <img
+                        src={getFlagSrc(game.homeTeam)}
+                        alt={game.homeTeam}
+                        style={{ width: 24, height: 16 }}
+                      />
+                    </Grid>
+                    <Grid item>
+                      <TextField
+                        type="number"
+                        size="small"
+                        value={predictions[game.id]?.homeScore ?? 0} // Varmistetaan, että arvo on numero
+                        onChange={(e) => handleInputChange(game.id, game.homeTeam, e.target.value)}
+                        inputProps={{ min: 0, style: { textAlign: 'center', width: '40px' } }}
+                        required
+                      />
+
+                    </Grid>
+                    <Grid item>
+                      <TextField
+                        type="number"
+                        size="small"
+                        value={predictions[game.id]?.awayScore ?? 0} // Varmistetaan, että arvo on numero
+                        onChange={(e) => handleInputChange(game.id, game.awayTeam, e.target.value)}
+                        inputProps={{ min: 0, style: { textAlign: 'center', width: '40px' } }}
+                        required
+                      />
+
+                    </Grid>
+                    <Grid item>
+                      <img
+                        src={getFlagSrc(game.awayTeam)}
+                        alt={game.awayTeam}
+                        style={{ width: 24, height: 16 }}
+                      />
+                    </Grid>
+                    <Grid item>
+                      <Typography sx={{ minWidth: 70 }} color="white">
+                        {game.awayTeam}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                </Paper>
+              ))}
+            </Grid>
+          ))}
+          <Grid item>
+            <Button type="submit" variant="contained" color="success">
+              Submit Predictions
+            </Button>
+          </Grid>
+        </Grid>
       </form>
-    </div>
+    </Container>
   );
 };
 
